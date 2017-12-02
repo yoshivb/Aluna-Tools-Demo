@@ -1,0 +1,15 @@
+#ifndef TMPL_PERFRAME
+#define TMPL_PERFRAME
+layout(std140) uniform PerFrame
+{
+	mat4 projection;
+	mat4 view;
+	mat4 projectionView;
+	mat4 inverseView;
+	mat4 inverseProjection;
+	mat4 inverseProjectionView;
+	vec2 screenSize;
+	float time;
+	float reserved;
+};
+#endif

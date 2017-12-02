@@ -1,0 +1,15 @@
+vec3 VSPositionFromDepth(vec2 vTexCoord)
+{
+    // Get the depth value for this pixel
+    float z = texture(tex2, vTexCoord.xy).r;  
+    // Get x*w and y*w from the viewport position
+	
+	// HLSL: // vec4 vProjectedPos = vec4(vec2(vTexCoord.x, 1.0-vTexCoord.y) * 2.0 - 1.0, z, 1.0);
+    vec4 vProjectedPos = vec4(vec3(vTexCoord,z) * 2.0 - 1.0, 1.0);
+    
+    // Transform by the inverse projection matrix
+	vec4 vPositionVS = (inverseProjectionView * vProjectedPos);  
+	
+    // Divide by w to get the view-space position
+    return vPositionVS.xyz / vPositionVS.w;  
+}

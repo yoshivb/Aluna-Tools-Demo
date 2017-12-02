@@ -1,0 +1,23 @@
+entity
+{
+	component
+	{
+		filename: Models\int_HallwayDoor_01.mfm
+		type: ComponentMesh
+	}
+	component
+	{
+		Physics File: Physics\int_HallwayDoor_01.hkt
+		type: ComponentTransformPhysics
+	}
+	component
+	{
+		shadowMode: 1.0
+		type: ComponentShadowCaster
+	}
+	component
+	{
+		type: ComponentAnimationController
+	}
+}
+

@@ -1,0 +1,148 @@
+#include "shaders/template_matrixhelpers.glinc"
+
+#ifdef LIGHTING_SPOT
+#ifdef SHADOWED
+
+float PCF( const vec4 projShadow, const float shadowMapSize, const float shadowBiasPcf)
+{
+	// 5-tap PCF with a 30° rotated grid
+	
+	float offset = (1.0 / shadowMapSize);
+	
+	float shadow = texture(tex3, projShadow.xyz);
+	shadow += texture(tex3, projShadow.xyz + vec3( -0.866 * offset,  0.5 * offset, -shadowBiasPcf) );
+	shadow += texture(tex3, projShadow.xyz + vec3( -0.866 * offset, -0.5 * offset, -shadowBiasPcf) );
+	shadow += texture(tex3, projShadow.xyz + vec3(  0.866 * offset, -0.5 * offset, -shadowBiasPcf) );
+	shadow += texture(tex3, projShadow.xyz + vec3(  0.866 * offset,  0.5 * offset, -shadowBiasPcf) );
+	
+	return shadow / 5.0;
+}
+
+#endif
+#endif
+
+#ifdef LIGHTING_POINT
+float VectorToDepthValue(vec3 Vec)
+{
+    vec3 AbsVec = abs(Vec);
+    float LocalZcomp = max(AbsVec.x, max(AbsVec.y, AbsVec.z));
+
+    float f = positionRange.w;				// far
+    float n = positionRange.w / 1000.0;		// near
+    float NormZComp = (f+n) / (f-n) - (2*f*n)/(f-n)/LocalZcomp;
+    return (NormZComp + 1.0) * 0.5;
+}
+#endif
+
+vec3 CalculateDiffuseSpecLight(const vec4 position, const vec3 color, const vec3 normal, const vec3 worldPosition, const vec4 albedo, const vec3 normalizedViewVec, float specPower, float specIntensity)
+{
+    vec3 ret;
+	
+	// diffuse contribution
+	vec3 lightVec = position.xyz  - worldPosition;
+	
+	// linear att
+	float attenuation = saturate(1.0-(length(lightVec)/ position.w));
+	
+	// squared att
+	//float attenuation = saturate(1.0-(dot(lightVec, lightVec)/(position.w*position.w)));
+	
+	vec3 normalizedLightVec = normalize(lightVec);
+	float nDotL = dot(normal, normalizedLightVec);
+	ret = albedo.xyz * color * saturate(nDotL * attenuation);
+
+	// specular contribution
+	if(nDotL > 0.0)
+	{
+		vec3 halfVec = normalize(normalizedLightVec + normalizedViewVec);
+		float specFactor = pow(saturate(dot(normal, halfVec)), specPower) * attenuation * specIntensity;
+		ret += color * specFactor;
+	}
+	
+	return ret;
+}
+
+vec3 CalculateDiffuseSpecLightDirectional(const vec3 direction, const vec3 color, const vec3 normal, const vec4 albedo, const vec3 normalizedViewVec, float specPower, float specIntensity)
+{
+    vec3 ret;
+	ret = albedo.xyz * color * saturate(dot(normal, direction));
+
+	// specular contribution
+	vec3 halfVec = normalize(direction + normalizedViewVec);
+	float specFactor = pow(saturate(dot(normal, halfVec)), specPower) * specIntensity;
+	ret += albedo.xyz * color * specFactor;
+	
+	return ret;
+}
+
+vec3 CalculateDiffuseSpecLightSpot(const vec4 position, const vec3 direction, const vec3 color, const vec3 normal, const vec3 worldPosition, const vec4 albedo, const vec3 normalizedViewVec, float specPower, float specIntensity, float coneCosAngle, float coneFalloff)
+{
+    vec3 ret;
+	
+	// diffuse contribution
+	vec3 lightVec = position.xyz  - worldPosition;
+	
+	// linear att
+	float attenuation = saturate(1.0-(length(lightVec)/ position.w));
+	//float attenuation = 1.0;
+	
+	// squared att
+	//float attenuation = saturate(1.0-(dot(lightVec, lightVec)/(position.w*position.w)));
+	
+	vec3 normalizedLightVec = normalize(lightVec);
+	float coneDot = dot(normalizedLightVec, direction);
+	
+	// cone falloff
+	float width=1.0-coneCosAngle;
+	float v=saturate((coneDot-coneCosAngle)/(coneFalloff*width));
+	attenuation *= v;
+	
+	// diffuse
+	ret = albedo.xyz * color * saturate(dot(normal, normalizedLightVec) * attenuation);
+	//ret = albedo.xyz * color * saturate(1.0 * attenuation);
+	
+	// specular contribution
+	vec3 halfVec = normalize(normalizedLightVec + normalizedViewVec);
+	float specFactor = pow(saturate(dot(normal, halfVec)), specPower) * attenuation * specIntensity;
+	ret += albedo.xyz * color * specFactor;
+	
+	return ret;
+}
+
+#ifdef LIT
+uniform vec4 lightingInformation[25];
+
+vec3 CalculateForwardLighting(const vec4 albedo, const vec3 normal, const vec3 VSOutTEXCOORD1, float specPower, float specIntensity)
+{
+	vec3 normalizedViewVec=CalculateNormalizedViewVec(VSOutTEXCOORD1);
+	int lightCount = int(lightingInformation[0].x);
+	vec3 lightColor=vec3(0.0,0.0,0.0);
+
+	for(int i=0; i<lightCount; i++)
+	{
+		int bidx=i*3+1;
+		
+		vec4 li0 = lightingInformation[bidx+0];
+		vec4 li1 = lightingInformation[bidx+1];
+		vec4 li2 = lightingInformation[bidx+2];
+		
+		if(li2.x == -10000.0)
+		{
+			// [[ CalculateDiffuseSpecLight(const vec4 position, const vec3 color, const vec3 normal, const vec3 worldPosition, const vec4 albedo, const vec3 normalizedViewVec, float specPower, float specIntensity) ]] 
+			lightColor = lightColor + CalculateDiffuseSpecLight(li0, li1.xyz, normal, VSOutTEXCOORD1, albedo , normalizedViewVec, specPower, specIntensity);
+		}
+		else
+		{
+			// [[ CalculateDiffuseSpecLightSpot(const vec4 position, const vec3 direction, const vec3 color, const vec3 normal, const vec3 worldPosition, const vec4 albedo, const vec3 normalizedViewVec, float specPower, float specIntensity, float coneCosAngle, float coneFalloff) ]]
+			lightColor = lightColor + CalculateDiffuseSpecLightSpot(li0, -li2.xyz, li1.xyz, normal, VSOutTEXCOORD1, albedo , normalizedViewVec, specPower, specIntensity, li2.w, li1.w);
+			//lightColor += vec3(1.0, 0.0, 0.0);
+		}
+	}
+	
+	return lightColor;
+}
+#endif
+
+
+
+
