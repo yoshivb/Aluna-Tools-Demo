@@ -12,17 +12,14 @@ namespace AlunaToolsDemo
 {
     class Program
     {
-        public static Game.Framework.Invoker Invoker;
-
         private static Engine m_engine;
-
         private static Game.Framework.SceneRenderer m_renderer;
-
         private static Game.Framework.Scene m_scene;
-
-        private static Helpers_SceneLoadedSubset m_loadedScene;
-
         private static Game.Framework.CameraFPS m_camera;
+        private static TextRenderer_Standalone m_textRenderer;
+
+        private static Door m_door;
+        private static InstructionsGUI m_instructGUI;
 
         private static string m_exePath = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location);
 
@@ -60,16 +57,14 @@ namespace AlunaToolsDemo
             Serialization.Initialize();
             Engine.InitPhysics();
 
-            Invoker = new Game.Framework.Invoker();
-
             m_engine = new Engine();
 
             Engine.InitializeFlags flags = Engine.InitializeFlags.DisableResize;
             m_engine.Initialize("Aluna Tools Demo", 1280, 720, flags, -1);
             Aluna.AlunaNETBridge.CfcAlunaBridgeInitialize(m_engine.window._window);
 
-            var textRenderer = (TextRenderer_Standalone)m_engine.textDraw;
-            textRenderer.AddFont("Fonts/FreeSans.ttf");
+            m_textRenderer = (TextRenderer_Standalone)m_engine.textDraw;
+            m_textRenderer.AddFont("Fonts/FreeSans.ttf");
 
             m_scene = new Scene(true);
             m_renderer = new SceneRenderer(m_engine, m_scene, "fullbright", "none", false);
@@ -79,7 +74,8 @@ namespace AlunaToolsDemo
             m_camera.LookAtDirection(new Microsoft.Xna.Framework.Vector3(-1,0,0));
             m_camera.InputMoveCameraEnabled = m_camera.InputRotateCameraEnabled = false;
 
-            m_loadedScene = m_scene.LoadScene("Scenes/HallwayDoor_01.mfs");
+            m_door = new Door(m_engine, m_scene);
+            m_instructGUI = new InstructionsGUI(m_textRenderer);
         }
 
         private static void MainLoop()
@@ -93,12 +89,15 @@ namespace AlunaToolsDemo
 
                 bool isRightMouseDown = m_engine.window.IsMouseDown(Aluna.WM_MouseButton.WMBTN_RIGHT);
                 m_camera.InputMoveCameraEnabled = m_camera.InputRotateCameraEnabled = isRightMouseDown;
+
                 m_camera.Update();
                 m_camera.Apply();
-                m_renderer.Render();
-                m_engine.Update();
-                Invoker.ExecuteQueue();
 
+                m_renderer.Render();
+                m_textRenderer.Render(m_engine.window.GetWidth(), m_engine.window.GetHeight());
+                m_door.Update();
+                m_engine.Update();
+                    
                 m_engine.renderer.Swap();
                 m_engine.window._window.EndFrame();
                 m_engine.EndFrame();
@@ -107,7 +106,7 @@ namespace AlunaToolsDemo
 
         private static void Shutdown()
         {
-            m_loadedScene.Unload();
+            m_door.Dispose();
             m_camera.Unload();
 
             if (Engine.PhysicsEngine != null)
